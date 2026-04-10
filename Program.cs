@@ -23,7 +23,6 @@ namespace MaxiGen
             this.Size = new Size(650, 650);
             this.StartPosition = FormStartPosition.CenterScreen;
 
-            // PANEL USTAWIEŃ
             Panel pnlSettings = new Panel { Dock = DockStyle.Right, Width = 220, Padding = new Padding(10), BackColor = Color.FromArgb(245, 245, 245) };
             
             pnlSettings.Controls.Add(new Label { Text = "Wybierz drukarkę:", Dock = DockStyle.Top });
@@ -50,7 +49,6 @@ namespace MaxiGen
             pnlSettings.Controls.Add(new Control { Height = 10, Dock = DockStyle.Bottom });
             pnlSettings.Controls.Add(btnPrint);
 
-            // GŁÓWNY OBSZAR
             txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 11), Text = "KOD123" };
             lblStatus = new Label { Text = "Gotowy.", Dock = DockStyle.Bottom, Height = 30, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(5) };
 
@@ -61,26 +59,12 @@ namespace MaxiGen
 
         private void LoadPrinters()
         {
-            foreach (string printer in PrinterSettings.InstalledPrinters)
-            {
-                cmbPrinters.Items.Add(printer);
-            }
-            if (cmbPrinters.Items.Count > 0)
-            {
-                PrinterSettings settings = new PrinterSettings();
-                int defaultIndex = cmbPrinters.Items.IndexOf(settings.PrinterName);
-                cmbPrinters.SelectedIndex = defaultIndex >= 0 ? defaultIndex : 0;
-            }
+            foreach (string printer in PrinterSettings.InstalledPrinters) cmbPrinters.Items.Add(printer);
+            if (cmbPrinters.Items.Count > 0) cmbPrinters.SelectedIndex = 0;
         }
 
         private void ProcessCodes(bool print)
         {
-            if (print && cmbPrinters.SelectedItem == null)
-            {
-                MessageBox.Show("Wybierz drukarkę!");
-                return;
-            }
-
             var lines = txtInput.Lines.Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
             if (lines.Length == 0) return;
 
@@ -92,22 +76,20 @@ namespace MaxiGen
                 try {
                     Bitmap bmp = GenerateMaxiCode(line, (int)numCodeSize.Value);
                     if (lines.Length == 1 && !print) Clipboard.SetImage(bmp);
-
                     string safeName = string.Join("_", line.Split(Path.GetInvalidFileNameChars()));
                     bmp.Save(Path.Combine(outputDir, safeName + ".png"), System.Drawing.Imaging.ImageFormat.Png);
-
                     if (print) PrintImage(bmp, cmbPrinters.SelectedItem.ToString());
-                } catch (Exception ex) {
-                    MessageBox.Show("Błąd przy kodzie " + line + ": " + ex.Message);
-                }
+                } catch (Exception ex) { MessageBox.Show("Błąd: " + ex.Message); }
             }
-            lblStatus.Text = print ? "Wysłano do druku." : "Zapisano w /Output.";
+            lblStatus.Text = "Zakończono operację.";
         }
 
         private Bitmap GenerateMaxiCode(string text, int pixelSize)
         {
-            // Poprawione odwołania do biblioteki Barcoder 1.0.0.47
-            var maxicode = Barcoder.Encoders.Maxicode.Encode(text);
+            // ZMIANA: Używamy Barcoder.Maxicode.MaxicodeEncoder bezpośrednio
+            var maxicode = Barcoder.Maxicode.MaxicodeEncoder.Encode(text);
+            
+            // ZMIANA: Renderer jest w Barcoder.Renderer.Image.ImageRenderer
             var renderer = new Barcoder.Renderer.Image.ImageRenderer(pixelSize: pixelSize);
             
             using (var ms = new MemoryStream())
@@ -119,13 +101,11 @@ namespace MaxiGen
                 {
                     int textSpace = (int)(skBitmap.Height * 0.25);
                     var info = new SKImageInfo(skBitmap.Width, skBitmap.Height + textSpace);
-                    
                     using (var surface = SKSurface.Create(info))
                     {
                         var canvas = surface.Canvas;
                         canvas.Clear(SKColors.White);
                         canvas.DrawBitmap(skBitmap, 0, 0);
-
                         using (var paint = new SKPaint { 
                             Color = SKColors.Black, 
                             TextSize = (float)(pixelSize * 2.5), 
@@ -136,7 +116,6 @@ namespace MaxiGen
                         {
                             canvas.DrawText(text, info.Width / 2, info.Height - (textSpace / 4), paint);
                         }
-
                         using (var image = surface.Snapshot())
                         using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
                         {
@@ -154,35 +133,20 @@ namespace MaxiGen
                 pd.PrinterSettings.PrinterName = printerName;
                 int w = (int)((double)numPaperW.Value / 25.4 * 100);
                 int h = (int)((double)numPaperH.Value / 25.4 * 100);
-
                 pd.DefaultPageSettings.PaperSize = new PaperSize("Custom", w, h);
                 pd.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
-                pd.OriginAtMargins = true;
-
                 pd.PrintPage += (s, ev) => {
-                    float x = (ev.PageBounds.Width - bmp.Width) / 2;
-                    float y = (ev.PageBounds.Height - bmp.Height) / 2;
-
-                    if (bmp.Width > ev.PageBounds.Width || bmp.Height > ev.PageBounds.Height)
-                    {
+                    if (bmp.Width > ev.PageBounds.Width || bmp.Height > ev.PageBounds.Height) {
                         float scale = Math.Min((float)ev.PageBounds.Width / bmp.Width, (float)ev.PageBounds.Height / bmp.Height);
                         ev.Graphics.DrawImage(bmp, (ev.PageBounds.Width - bmp.Width * scale) / 2, (ev.PageBounds.Height - bmp.Height * scale) / 2, bmp.Width * scale, bmp.Height * scale);
-                    }
-                    else
-                    {
-                        ev.Graphics.DrawImage(bmp, x, y);
+                    } else {
+                        ev.Graphics.DrawImage(bmp, (ev.PageBounds.Width - bmp.Width) / 2, (ev.PageBounds.Height - bmp.Height) / 2);
                     }
                 };
                 pd.Print();
             }
         }
 
-        [STAThread]
-        static void Main()
-        {
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
-        }
+        [STAThread] static void Main() { Application.EnableVisualStyles(); Application.Run(new MainForm()); }
     }
 }
