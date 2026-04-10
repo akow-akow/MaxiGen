@@ -1,19 +1,13 @@
-name: .NET Framework Build
+name: Build MaxiGen GUI
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+on: [push]
 
 jobs:
   build:
-    # .NET Framework 4.8 wymaga Windowsa do pełnej kompilacji
     runs-on: windows-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
@@ -21,21 +15,14 @@ jobs:
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v2
 
-    - name: Restore NuGet packages
-      # Zakładamy, że projekt znajduje się w folderze MaxiGen.Console
-      # Jeśli plik .csproj jest w głównym folderze, usuń "MaxiGen.Console/"
-      run: nuget restore MaxiGen.Console.csproj -PackagesDirectory packages
+    - name: Restore
+      run: nuget restore MaxiGen.csproj -PackagesDirectory packages
 
-    - name: Build Project
-      run: |
-        msbuild MaxiGen.Console/MaxiGen.Console.csproj `
-          /p:Configuration=Release `
-          /p:Platform="Any CPU" `
-          /p:OutputPath=../publish/
+    - name: Build
+      run: msbuild MaxiGen.csproj /p:Configuration=Release /p:OutputPath=./publish/
 
-    - name: Upload Artifacts
+    - name: Upload App
       uses: actions/upload-artifact@v4
       with:
-        name: MaxiCode-Generator-Net48
-        path: publish/
-        if-no-files-found: error
+        name: MaxiGen-Portable
+        path: ./publish/
