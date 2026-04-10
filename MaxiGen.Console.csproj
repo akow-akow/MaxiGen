@@ -1,9 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net48</TargetFramework>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>disable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
     <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
@@ -11,5 +10,6 @@
     <PackageReference Include="Barcoder" Version="1.0.0-preview.1" />
     <PackageReference Include="Barcoder.Renderer.Image" Version="1.0.0-preview.1" />
     <PackageReference Include="SkiaSharp" Version="2.88.6" />
-    </ItemGroup>
+    <PackageReference Include="SkiaSharp.Views.WindowsForms" Version="2.88.6" />
+  </ItemGroup>
 </Project>
