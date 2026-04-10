@@ -6,7 +6,7 @@ using System.Drawing.Printing;
 using System.Linq;
 using Aspose.BarCode.Generation;
 
-// Alias dla uniknięcia konfliktów nazw
+// Rozwiązanie konfliktu nazw Padding
 using WinPadding = System.Windows.Forms.Padding;
 
 namespace MaxiGen
@@ -22,20 +22,20 @@ namespace MaxiGen
 
         public MainForm()
         {
-            this.Text = "MaxiGen Pro v2.0 - Zebra Tool";
-            this.Size = new Size(700, 720);
+            this.Text = "MaxiGen Pro v2.1 - Fix: Font Scaling";
+            this.Size = new Size(700, 750);
             this.StartPosition = FormStartPosition.CenterScreen;
 
-            // Panel boczny z ustawieniami
-            Panel pnlSettings = new Panel { Dock = DockStyle.Right, Width = 240, Padding = new WinPadding(10), BackColor = Color.FromArgb(240, 240, 240) };
+            // Panel boczny
+            Panel pnlSettings = new Panel { Dock = DockStyle.Right, Width = 250, Padding = new WinPadding(10), BackColor = Color.FromArgb(240, 240, 240) };
             
-            // --- Sekcja Drukarki ---
+            // Drukarka
             pnlSettings.Controls.Add(new Label { Text = "Drukarka:", Dock = DockStyle.Top });
             cmbPrinters = new ComboBox { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList };
             LoadPrinters();
             pnlSettings.Controls.Add(cmbPrinters);
 
-            // --- Sekcja Rozmiarów Papieru ---
+            // Rozmiar Papieru
             pnlSettings.Controls.Add(new Label { Text = "Szer. etykiety (mm):", Dock = DockStyle.Top, Margin = new WinPadding(0, 15, 0, 0) });
             numPaperW = new NumericUpDown { Dock = DockStyle.Top, Minimum = 10, Maximum = 500, Value = 100 };
             pnlSettings.Controls.Add(numPaperW);
@@ -44,20 +44,20 @@ namespace MaxiGen
             numPaperH = new NumericUpDown { Dock = DockStyle.Top, Minimum = 10, Maximum = 500, Value = 70 };
             pnlSettings.Controls.Add(numPaperH);
 
-            // --- Sekcja MaxiCode ---
+            // Skala Kodu
             pnlSettings.Controls.Add(new Label { Text = "Skala MaxiCode (Pixels):", Dock = DockStyle.Top, Margin = new WinPadding(0, 15, 0, 0) });
-            numCodeSize = new NumericUpDown { Dock = DockStyle.Top, Minimum = 1, Maximum = 100, Value = 10 };
+            numCodeSize = new NumericUpDown { Dock = DockStyle.Top, Minimum = 1, Maximum = 100, Value = 8 };
             pnlSettings.Controls.Add(numCodeSize);
 
-            // --- NOWE: Sekcja Napisu pod kodem ---
-            pnlSettings.Controls.Add(new Label { Text = "Rozmiar czcionki tekstu:", Dock = DockStyle.Top, Margin = new WinPadding(0, 15, 0, 0) });
-            numFontSize = new NumericUpDown { Dock = DockStyle.Top, Minimum = 4, Maximum = 72, Value = 14 }; // Domyślnie 14, żeby był czytelny
+            // --- SEKCJA CZCIONKI (Fix) ---
+            pnlSettings.Controls.Add(new Label { Text = "Rozmiar napisu (Pixels):", Dock = DockStyle.Top, Margin = new WinPadding(0, 15, 0, 0) });
+            numFontSize = new NumericUpDown { Dock = DockStyle.Top, Minimum = 5, Maximum = 200, Value = 40 }; 
             pnlSettings.Controls.Add(numFontSize);
 
             chkShowText = new CheckBox { Text = "Pokaż tekst pod kodem", Checked = true, Dock = DockStyle.Top, Margin = new WinPadding(0, 5, 0, 0) };
             pnlSettings.Controls.Add(chkShowText);
 
-            // --- Przyciski Akcji ---
+            // Przyciski
             btnGenerate = new Button { Text = "ZAPISZ PNG", Dock = DockStyle.Bottom, Height = 45, BackColor = Color.White, FlatStyle = FlatStyle.Flat };
             btnPrint = new Button { Text = "DRUKUJ", Dock = DockStyle.Bottom, Height = 65, BackColor = Color.FromArgb(40, 167, 69), ForeColor = Color.White, Font = new Font(this.Font, FontStyle.Bold), FlatStyle = FlatStyle.Flat };
             
@@ -68,8 +68,7 @@ namespace MaxiGen
             pnlSettings.Controls.Add(new Control { Height = 10, Dock = DockStyle.Bottom });
             pnlSettings.Controls.Add(btnPrint);
 
-            // Pole tekstowe na dane
-            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), Text = "TEST123456\nMAXICODE_V2" };
+            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), Text = "KOD-TEST-123\nKOD-TEST-456" };
             lblStatus = new Label { Text = "Gotowy.", Dock = DockStyle.Bottom, Height = 25, BackColor = Color.White };
 
             this.Controls.Add(txtInput);
@@ -102,16 +101,19 @@ namespace MaxiGen
 
                     using (var generator = new BarcodeGenerator(EncodeTypes.MaxiCode, line))
                     {
-                        // Ustawienia MaxiCode
+                        // Klucz do poprawnego skalowania:
+                        generator.Parameters.Resolution = 300; 
+
                         generator.Parameters.Barcode.MaxiCode.MaxiCodeMode = MaxiCodeMode.Mode4;
                         generator.Parameters.Barcode.XDimension.Pixels = (float)numCodeSize.Value;
                         
-                        // Konfiguracja napisu pod kodem
                         if (chkShowText.Checked)
                         {
                             generator.Parameters.Barcode.CodeTextParameters.Location = CodeLocation.Below;
-                            generator.Parameters.Barcode.CodeTextParameters.Font.Size.Point = (float)numFontSize.Value;
+                            // Używamy .Pixels zamiast .Point
+                            generator.Parameters.Barcode.CodeTextParameters.Font.Size.Pixels = (float)numFontSize.Value;
                             generator.Parameters.Barcode.CodeTextParameters.Font.FamilyName = "Arial";
+                            generator.Parameters.Barcode.CodeTextParameters.Space.Pixels = 10;
                         }
                         else
                         {
@@ -134,7 +136,7 @@ namespace MaxiGen
                     MessageBox.Show("Błąd: " + ex.Message); 
                 }
             }
-            lblStatus.Text = "Zakończono generowanie!";
+            lblStatus.Text = "Operacja zakończona sukcesem!";
         }
 
         private void PrintImage(Bitmap bmp, string printerName)
