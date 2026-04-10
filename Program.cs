@@ -5,7 +5,7 @@ using System.Windows.Forms;
 using System.Drawing.Printing;
 using System.Linq;
 using ZXing;
-using ZXing.Maxicode;
+using ZXing.MaxiCode; // Tu musi być MaxiCode
 
 namespace MaxiGen
 {
@@ -20,7 +20,7 @@ namespace MaxiGen
 
         public MainForm()
         {
-            this.Text = "MaxiGen v3.5 - ZXing Engine";
+            this.Text = "MaxiGen v3.6 - Final Stable";
             this.Size = new Size(700, 750);
             this.StartPosition = FormStartPosition.CenterScreen;
 
@@ -40,11 +40,11 @@ namespace MaxiGen
             pnlSettings.Controls.Add(numPaperH);
 
             pnlSettings.Controls.Add(new Label { Text = "Skala MaxiCode:", Dock = DockStyle.Top, Margin = new Padding(0, 15, 0, 0) });
-            numCodeScale = new NumericUpDown { Dock = DockStyle.Top, Minimum = 1, Maximum = 50, Value = 8 };
+            numCodeScale = new NumericUpDown { Dock = DockStyle.Top, Minimum = 1, Maximum = 50, Value = 10 };
             pnlSettings.Controls.Add(numCodeScale);
 
             pnlSettings.Controls.Add(new Label { Text = "Rozmiar napisu (pt):", Dock = DockStyle.Top, Margin = new Padding(0, 15, 0, 0) });
-            numFontSize = new NumericUpDown { Dock = DockStyle.Top, Minimum = 4, Maximum = 100, Value = 14 }; 
+            numFontSize = new NumericUpDown { Dock = DockStyle.Top, Minimum = 4, Maximum = 100, Value = 16 }; 
             pnlSettings.Controls.Add(numFontSize);
 
             chkShowText = new CheckBox { Text = "Pokaż tekst pod kodem", Checked = true, Dock = DockStyle.Top, Margin = new Padding(0, 5, 0, 0) };
@@ -60,8 +60,8 @@ namespace MaxiGen
             pnlSettings.Controls.Add(new Control { Height = 10, Dock = DockStyle.Bottom });
             pnlSettings.Controls.Add(btnPrint);
 
-            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), Text = "KOD123456\nMAXICODE-STABLE" };
-            lblStatus = new Label { Text = "Silnik: ZXing.Net", Dock = DockStyle.Bottom, Height = 25, BackColor = Color.White };
+            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), Text = "KOD123456\nMAXICODE-FINAL" };
+            lblStatus = new Label { Text = "Silnik: ZXing.Net (Free)", Dock = DockStyle.Bottom, Height = 25, BackColor = Color.White };
 
             this.Controls.Add(txtInput);
             this.Controls.Add(pnlSettings);
@@ -79,7 +79,8 @@ namespace MaxiGen
         private void ProcessCodes(bool print)
         {
             var lines = txtInput.Lines.Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
-            var writer = new MaxicodeWriter();
+            // FIX: Poprawna nazwa klasy to MaxiCodeWriter
+            var writer = new ZXing.MaxiCode.MaxiCodeWriter();
 
             foreach (var line in lines)
             {
@@ -89,7 +90,7 @@ namespace MaxiGen
                     if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
                     string filePath = Path.Combine(outputDir, Guid.NewGuid().ToString().Substring(0,8) + ".png");
 
-                    // Generowanie macierzy bitowej (MaxiCode ma stały rozmiar 30x33)
+                    // Enkodowanie
                     var matrix = writer.encode(line, BarcodeFormat.MAXICODE, 0, 0);
                     
                     int scale = (int)numCodeScale.Value;
@@ -102,8 +103,6 @@ namespace MaxiGen
                     using (Graphics g = Graphics.FromImage(bmp))
                     {
                         g.Clear(Color.White);
-                        
-                        // Rysowanie MaxiCode (czarne kropki/piksele)
                         using (Brush brush = new SolidBrush(Color.Black))
                         {
                             for (int y = 0; y < matrix.Height; y++)
@@ -116,7 +115,6 @@ namespace MaxiGen
                             }
                         }
 
-                        // Dodawanie napisu
                         if (chkShowText.Checked)
                         {
                             using (Font font = new Font("Arial", (float)numFontSize.Value, FontStyle.Bold))
@@ -135,7 +133,7 @@ namespace MaxiGen
                 } 
                 catch (Exception ex) { MessageBox.Show("Błąd: " + ex.Message); }
             }
-            lblStatus.Text = "Gotowe!";
+            lblStatus.Text = "Zakończono pomyślnie.";
         }
 
         private void PrintFile(string path, string printerName)
@@ -143,7 +141,11 @@ namespace MaxiGen
             using (PrintDocument pd = new PrintDocument())
             {
                 pd.PrinterSettings.PrinterName = printerName;
+                int w = (int)((double)numPaperW.Value / 25.4 * 100);
+                int h = (int)((double)numPaperH.Value / 25.4 * 100);
+                pd.DefaultPageSettings.PaperSize = new PaperSize("Label", w, h);
                 pd.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+
                 pd.PrintPage += (s, ev) => {
                     using (Image img = Image.FromFile(path))
                     {
@@ -157,6 +159,7 @@ namespace MaxiGen
 
         [STAThread] static void Main() { 
             Application.EnableVisualStyles(); 
+            Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm()); 
         }
     }
