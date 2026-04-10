@@ -3,30 +3,39 @@ name: .NET Framework Build
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   build:
-    runs-on: windows-latest  # Niezbędne dla .NET Framework 4.8
+    # .NET Framework 4.8 wymaga Windowsa do pełnej kompilacji
+    runs-on: windows-latest
 
-steps:
-    - uses: actions/checkout@v4
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
     - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2 # Aktualizacja do v2
+      uses: microsoft/setup-msbuild@v2
 
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v2
 
     - name: Restore NuGet packages
-      # Szukamy bezpośrednio pliku projektu zamiast .sln
+      # Zakładamy, że projekt znajduje się w folderze MaxiGen.Console
+      # Jeśli plik .csproj jest w głównym folderze, usuń "MaxiGen.Console/"
       run: nuget restore MaxiGen.Console/MaxiGen.Console.csproj -PackagesDirectory packages
 
-    - name: Build
-      # Kompilujemy bezpośrednio projekt
-      run: msbuild MaxiGen.Console/MaxiGen.Console.csproj /p:Configuration=Release /p:OutDir=../publish/
+    - name: Build Project
+      run: |
+        msbuild MaxiGen.Console/MaxiGen.Console.csproj `
+          /p:Configuration=Release `
+          /p:Platform="Any CPU" `
+          /p:OutputPath=../publish/
 
-    - name: Upload Artifact
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: MaxiGen-Net48-Binary
-        path: ./MaxiGen.Console/bin/Release/
+        name: MaxiCode-Generator-Net48
+        path: publish/
+        if-no-files-found: error
