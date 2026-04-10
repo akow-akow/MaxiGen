@@ -16,15 +16,24 @@ jobs:
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v2
 
-    - name: Restore NuGet Packages
-      # Ponieważ plik jest w głównym folderze, podajemy tylko nazwę
-      run: nuget restore MaxiGen.csproj -PackagesDirectory packages
+    - name: Find and Restore
+      shell: pwsh
+      run: |
+        # Szukamy pliku csproj w całym repozytorium
+        $proj = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1
+        if ($null -eq $proj) { throw "Nie znaleziono pliku .csproj w repozytorium!" }
+        Write-Host "Znaleziono projekt: $($proj.FullName)"
+        nuget restore $($proj.FullName) -PackagesDirectory packages
 
     - name: Build Project
-      run: msbuild MaxiGen.csproj /p:Configuration=Release /p:OutputPath=./publish/
+      shell: pwsh
+      run: |
+        $proj = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1
+        # Kompilujemy do folderu publish
+        msbuild $($proj.FullName) /p:Configuration=Release /p:OutputPath=$env:GITHUB_WORKSPACE\publish\
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: MaxiGen-App
-        path: ./publish/
+        path: publish/
