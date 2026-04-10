@@ -4,10 +4,8 @@ using System.IO;
 using System.Windows.Forms;
 using System.Drawing.Printing;
 using System.Linq;
-using Barcoder;
-// Zmiana: Biblioteka często używa tej przestrzeni nazw dla enkodera
-using Barcoder.Maxicode; 
-using Barcoder.Renderer.Image;
+using ZXing;
+using ZXing.Maxicode;
 
 namespace MaxiGen
 {
@@ -22,7 +20,7 @@ namespace MaxiGen
 
         public MainForm()
         {
-            this.Text = "MaxiGen FREE v3.1 - Fixed Namespace";
+            this.Text = "MaxiGen v3.5 - ZXing Engine";
             this.Size = new Size(700, 750);
             this.StartPosition = FormStartPosition.CenterScreen;
 
@@ -42,11 +40,11 @@ namespace MaxiGen
             pnlSettings.Controls.Add(numPaperH);
 
             pnlSettings.Controls.Add(new Label { Text = "Skala MaxiCode:", Dock = DockStyle.Top, Margin = new Padding(0, 15, 0, 0) });
-            numCodeScale = new NumericUpDown { Dock = DockStyle.Top, Minimum = 1, Maximum = 50, Value = 10 };
+            numCodeScale = new NumericUpDown { Dock = DockStyle.Top, Minimum = 1, Maximum = 50, Value = 8 };
             pnlSettings.Controls.Add(numCodeScale);
 
             pnlSettings.Controls.Add(new Label { Text = "Rozmiar napisu (pt):", Dock = DockStyle.Top, Margin = new Padding(0, 15, 0, 0) });
-            numFontSize = new NumericUpDown { Dock = DockStyle.Top, Minimum = 4, Maximum = 100, Value = 16 }; 
+            numFontSize = new NumericUpDown { Dock = DockStyle.Top, Minimum = 4, Maximum = 100, Value = 14 }; 
             pnlSettings.Controls.Add(numFontSize);
 
             chkShowText = new CheckBox { Text = "Pokaż tekst pod kodem", Checked = true, Dock = DockStyle.Top, Margin = new Padding(0, 5, 0, 0) };
@@ -62,8 +60,8 @@ namespace MaxiGen
             pnlSettings.Controls.Add(new Control { Height = 10, Dock = DockStyle.Bottom });
             pnlSettings.Controls.Add(btnPrint);
 
-            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), Text = "KOD123456\nMAXICODE-FREE" };
-            lblStatus = new Label { Text = "Gotowy.", Dock = DockStyle.Bottom, Height = 25, BackColor = Color.White };
+            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), Text = "KOD123456\nMAXICODE-STABLE" };
+            lblStatus = new Label { Text = "Silnik: ZXing.Net", Dock = DockStyle.Bottom, Height = 25, BackColor = Color.White };
 
             this.Controls.Add(txtInput);
             this.Controls.Add(pnlSettings);
@@ -81,6 +79,8 @@ namespace MaxiGen
         private void ProcessCodes(bool print)
         {
             var lines = txtInput.Lines.Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
+            var writer = new MaxicodeWriter();
+
             foreach (var line in lines)
             {
                 try 
@@ -89,42 +89,75 @@ namespace MaxiGen
                     if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
                     string filePath = Path.Combine(outputDir, Guid.NewGuid().ToString().Substring(0,8) + ".png");
 
-                    // FIX: Bezpośrednie wywołanie enkodera z poprawioną wielkością liter
-                    var barcode = Barcoder.Maxicode.MaxicodeEncoder.Encode(line, 4);
+                    // Generowanie macierzy bitowej (MaxiCode ma stały rozmiar 30x33)
+                    var matrix = writer.encode(line, BarcodeFormat.MAXICODE, 0, 0);
+                    
+                    int scale = (int)numCodeScale.Value;
+                    int textSpace = chkShowText.Checked ? (int)(numFontSize.Value * 3) : 0;
+                    
+                    int bmpW = matrix.Width * scale;
+                    int bmpH = matrix.Height * scale;
 
-                    var renderer = new ImageRenderer();
-                    using (MemoryStream ms = new MemoryStream())
+                    using (Bitmap bmp = new Bitmap(bmpW, bmpH + textSpace))
+                    using (Graphics g = Graphics.FromImage(bmp))
                     {
-                        renderer.Render(barcode, ms);
-                        using (Bitmap tempBmp = new Bitmap(ms))
+                        g.Clear(Color.White);
+                        
+                        // Rysowanie MaxiCode (czarne kropki/piksele)
+                        using (Brush brush = new SolidBrush(Color.Black))
                         {
-                            int scale = (int)numCodeScale.Value;
-                            int textSpace = chkShowText.Checked ? (int)(numFontSize.Value * 2.5) : 0;
-                            
-                            using (Bitmap finalImg = new Bitmap(tempBmp.Width * scale, (tempBmp.Height * scale) + textSpace))
-                            using (Graphics g = Graphics.FromImage(finalImg))
+                            for (int y = 0; y < matrix.Height; y++)
                             {
-                                g.Clear(Color.White);
-                                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
-                                g.DrawImage(tempBmp, 0, 0, tempBmp.Width * scale, tempBmp.Height * scale);
-
-                                if (chkShowText.Checked)
+                                for (int x = 0; x < matrix.Width; x++)
                                 {
-                                    using (Font font = new Font("Arial", (float)numFontSize.Value, FontStyle.Bold))
-                                    {
-                                        StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                                        g.DrawString(line, font, Brushes.Black, new RectangleF(0, tempBmp.Height * scale, finalImg.Width, textSpace), sf);
-                                    }
+                                    if (matrix[x, y])
+                                        g.FillRectangle(brush, x * scale, y * scale, scale, scale);
                                 }
-                                finalImg.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
                             }
                         }
+
+                        // Dodawanie napisu
+                        if (chkShowText.Checked)
+                        {
+                            using (Font font = new Font("Arial", (float)numFontSize.Value, FontStyle.Bold))
+                            {
+                                StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                                g.DrawString(line, font, Brushes.Black, new RectangleF(0, bmpH, bmpW, textSpace), sf);
+                            }
+                        }
+                        bmp.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
                     }
-                    if (print) { /* Logika drukowania analogiczna do poprzedniej */ }
+
+                    if (print && cmbPrinters.SelectedItem != null)
+                    {
+                        PrintFile(filePath, cmbPrinters.SelectedItem.ToString());
+                    }
                 } 
                 catch (Exception ex) { MessageBox.Show("Błąd: " + ex.Message); }
             }
-            lblStatus.Text = "Zakończono!";
+            lblStatus.Text = "Gotowe!";
+        }
+
+        private void PrintFile(string path, string printerName)
+        {
+            using (PrintDocument pd = new PrintDocument())
+            {
+                pd.PrinterSettings.PrinterName = printerName;
+                pd.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+                pd.PrintPage += (s, ev) => {
+                    using (Image img = Image.FromFile(path))
+                    {
+                        float scale = Math.Min((float)ev.PageBounds.Width / img.Width, (float)ev.PageBounds.Height / img.Height);
+                        ev.Graphics.DrawImage(img, 0, 0, img.Width * scale, img.Height * scale);
+                    }
+                };
+                pd.Print();
+            }
+        }
+
+        [STAThread] static void Main() { 
+            Application.EnableVisualStyles(); 
+            Application.Run(new MainForm()); 
         }
     }
 }
