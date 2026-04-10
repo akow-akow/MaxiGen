@@ -3,13 +3,16 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net48</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <Platforms>AnyCPU;x64</Platforms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AssemblyTitle>MaxiCode Generator</AssemblyTitle>
+    <OutputPath>bin\Release\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Barcoder" Version="1.0.0-preview.1" />
     <PackageReference Include="Barcoder.Renderer.Image" Version="1.0.0-preview.1" />
     <PackageReference Include="SkiaSharp" Version="2.88.6" />
-    <PackageReference Include="SkiaSharp.Views.WindowsForms" Version="2.88.6" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="2.88.6" />
   </ItemGroup>
 </Project>
