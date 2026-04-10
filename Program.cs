@@ -4,8 +4,8 @@ using System.IO;
 using System.Windows.Forms;
 using System.Drawing.Printing;
 using System.Linq;
-using ZXing;
-using ZXing.MaxiCode; // Tu musi być MaxiCode
+using ZXing; // Główna przestrzeń nazw
+using ZXing.Common;
 
 namespace MaxiGen
 {
@@ -20,7 +20,7 @@ namespace MaxiGen
 
         public MainForm()
         {
-            this.Text = "MaxiGen v3.6 - Final Stable";
+            this.Text = "MaxiGen v3.7 - Compatibility Mode";
             this.Size = new Size(700, 750);
             this.StartPosition = FormStartPosition.CenterScreen;
 
@@ -60,8 +60,8 @@ namespace MaxiGen
             pnlSettings.Controls.Add(new Control { Height = 10, Dock = DockStyle.Bottom });
             pnlSettings.Controls.Add(btnPrint);
 
-            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), Text = "KOD123456\nMAXICODE-FINAL" };
-            lblStatus = new Label { Text = "Silnik: ZXing.Net (Free)", Dock = DockStyle.Bottom, Height = 25, BackColor = Color.White };
+            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), Text = "KOD123456\nPRO-MAXI-FREE" };
+            lblStatus = new Label { Text = "Tryb: MultiFormatWriter", Dock = DockStyle.Bottom, Height = 25, BackColor = Color.White };
 
             this.Controls.Add(txtInput);
             this.Controls.Add(pnlSettings);
@@ -79,8 +79,8 @@ namespace MaxiGen
         private void ProcessCodes(bool print)
         {
             var lines = txtInput.Lines.Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
-            // FIX: Poprawna nazwa klasy to MaxiCodeWriter
-            var writer = new ZXing.MaxiCode.MaxiCodeWriter();
+            // MultiFormatWriter jest częścią głównego namespace'u ZXing
+            var writer = new MultiFormatWriter();
 
             foreach (var line in lines)
             {
@@ -90,16 +90,13 @@ namespace MaxiGen
                     if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
                     string filePath = Path.Combine(outputDir, Guid.NewGuid().ToString().Substring(0,8) + ".png");
 
-                    // Enkodowanie
-                    var matrix = writer.encode(line, BarcodeFormat.MAXICODE, 0, 0);
+                    // Automatyczne dopasowanie enkodera do formatu MAXICODE
+                    BitMatrix matrix = writer.encode(line, BarcodeFormat.MAXICODE, 0, 0);
                     
                     int scale = (int)numCodeScale.Value;
                     int textSpace = chkShowText.Checked ? (int)(numFontSize.Value * 3) : 0;
                     
-                    int bmpW = matrix.Width * scale;
-                    int bmpH = matrix.Height * scale;
-
-                    using (Bitmap bmp = new Bitmap(bmpW, bmpH + textSpace))
+                    using (Bitmap bmp = new Bitmap(matrix.Width * scale, (matrix.Height * scale) + textSpace))
                     using (Graphics g = Graphics.FromImage(bmp))
                     {
                         g.Clear(Color.White);
@@ -120,7 +117,7 @@ namespace MaxiGen
                             using (Font font = new Font("Arial", (float)numFontSize.Value, FontStyle.Bold))
                             {
                                 StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                                g.DrawString(line, font, Brushes.Black, new RectangleF(0, bmpH, bmpW, textSpace), sf);
+                                g.DrawString(line, font, Brushes.Black, new RectangleF(0, matrix.Height * scale, bmp.Width, textSpace), sf);
                             }
                         }
                         bmp.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
@@ -133,7 +130,7 @@ namespace MaxiGen
                 } 
                 catch (Exception ex) { MessageBox.Show("Błąd: " + ex.Message); }
             }
-            lblStatus.Text = "Zakończono pomyślnie.";
+            lblStatus.Text = "Gotowe - Bez znaków wodnych!";
         }
 
         private void PrintFile(string path, string printerName)
@@ -158,7 +155,7 @@ namespace MaxiGen
         }
 
         [STAThread] static void Main() { 
-            Application.EnableVisualStyles(); 
+            Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm()); 
         }
