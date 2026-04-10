@@ -13,8 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Barcoder" Version="1.0.0.67" />
-    <PackageReference Include="Barcoder.Renderer.Image" Version="1.0.0.67" />
+    <PackageReference Include="ZXing.Net" Version="0.16.9" />
   </ItemGroup>
 
 </Project>
