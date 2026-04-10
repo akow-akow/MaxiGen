@@ -1,0 +1,30 @@
+name: .NET Framework Build
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest  # Niezbędne dla .NET Framework 4.8
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.3
+
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v1.2.0
+
+    - name: Restore NuGet packages
+      run: nuget restore MaxiGen.sln
+
+    - name: Build
+      run: msbuild MaxiGen.sln /p:Configuration=Release
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MaxiGen-Net48-Binary
+        path: ./MaxiGen.Console/bin/Release/
