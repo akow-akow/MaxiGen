@@ -4,9 +4,9 @@ using System.IO;
 using System.Windows.Forms;
 using System.Drawing.Printing;
 using System.Linq;
-using ZXing;
-using ZXing.Maxicode;
-using ZXing.Common;
+using Barcoder;
+using Barcoder.Maxicode;
+using Barcoder.Renderer.Image;
 
 namespace MaxiGen
 {
@@ -21,7 +21,7 @@ namespace MaxiGen
 
         public MainForm()
         {
-            this.Text = "MaxiGen FREE (No Watermark) - Zebra Edition";
+            this.Text = "MaxiGen FREE v3.0 - Barcoder Engine";
             this.Size = new Size(700, 750);
             this.StartPosition = FormStartPosition.CenterScreen;
 
@@ -45,7 +45,7 @@ namespace MaxiGen
             pnlSettings.Controls.Add(numCodeScale);
 
             pnlSettings.Controls.Add(new Label { Text = "Rozmiar napisu (pt):", Dock = DockStyle.Top, Margin = new Padding(0, 15, 0, 0) });
-            numFontSize = new NumericUpDown { Dock = DockStyle.Top, Minimum = 4, Maximum = 100, Value = 12 }; 
+            numFontSize = new NumericUpDown { Dock = DockStyle.Top, Minimum = 4, Maximum = 100, Value = 16 }; 
             pnlSettings.Controls.Add(numFontSize);
 
             chkShowText = new CheckBox { Text = "Pokaż tekst pod kodem", Checked = true, Dock = DockStyle.Top, Margin = new Padding(0, 5, 0, 0) };
@@ -61,8 +61,8 @@ namespace MaxiGen
             pnlSettings.Controls.Add(new Control { Height = 10, Dock = DockStyle.Bottom });
             pnlSettings.Controls.Add(btnPrint);
 
-            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), Text = "FREE-CODE-123\nTEST-NO-WATERMARK" };
-            lblStatus = new Label { Text = "Gotowy (Wersja darmowa).", Dock = DockStyle.Bottom, Height = 25, BackColor = Color.White };
+            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), Text = "KOD123456789\nTEST-MAXICODE" };
+            lblStatus = new Label { Text = "Silnik: Barcoder (Open Source).", Dock = DockStyle.Bottom, Height = 25, BackColor = Color.White };
 
             this.Controls.Add(txtInput);
             this.Controls.Add(pnlSettings);
@@ -85,13 +85,6 @@ namespace MaxiGen
             string outputDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Output");
             if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
 
-            // Inicjalizacja writera ZXing
-            var writer = new BarcodeWriterPixelData
-            {
-                Format = BarcodeFormat.MAXICODE,
-                Options = new EncodingOptions { Height = 300, Width = 300, Margin = 1 }
-            };
-
             foreach (var line in lines)
             {
                 try 
@@ -99,41 +92,44 @@ namespace MaxiGen
                     string safeName = string.Join("_", line.Split(Path.GetInvalidFileNameChars()));
                     string filePath = Path.Combine(outputDir, safeName + ".png");
 
-                    // 1. Generuj surowy obraz kodu
-                    var pixelData = writer.Write(line);
-                    using (var tempBmp = new Bitmap(pixelData.Width, pixelData.Height, System.Drawing.Imaging.PixelFormat.Format32bppRgb))
+                    // 1. Generowanie struktury MaxiCode (Mode 4 - General Purpose)
+                    var barcode = MaxicodeEncoder.Encode(line, 4);
+
+                    // 2. Renderowanie do obrazu za pomocą Barcoder.Renderer.Image
+                    var renderer = new ImageRenderer();
+                    using (MemoryStream ms = new MemoryStream())
                     {
-                        var bitmapData = tempBmp.LockBits(new Rectangle(0, 0, pixelData.Width, pixelData.Height), System.Drawing.Imaging.ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
-                        try { System.Runtime.InteropServices.Marshal.Copy(pixelData.Pixels, 0, bitmapData.Scan0, pixelData.Pixels.Length); }
-                        finally { tempBmp.UnlockBits(bitmapData); }
-
-                        // 2. Skalowanie i dodawanie tekstu (Ręczne rysowanie)
-                        int scale = (int)numCodeScale.Value;
-                        int textSpace = chkShowText.Checked ? (int)numFontSize.Value * 2 : 0;
-                        
-                        int finalW = tempBmp.Width * scale;
-                        int finalH = (tempBmp.Height * scale) + textSpace;
-
-                        using (Bitmap finalImg = new Bitmap(finalW, finalH))
-                        using (Graphics g = Graphics.FromImage(finalImg))
+                        renderer.Render(barcode, ms);
+                        using (Bitmap tempBmp = new Bitmap(ms))
                         {
-                            g.Clear(Color.White);
-                            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                            // 3. Ręczne skalowanie i dodawanie napisu
+                            int scale = (int)numCodeScale.Value;
+                            int textSpace = chkShowText.Checked ? (int)(numFontSize.Value * 2.5) : 0;
                             
-                            // Rysuj kod
-                            g.DrawImage(tempBmp, 0, 0, tempBmp.Width * scale, tempBmp.Height * scale);
+                            int finalW = tempBmp.Width * scale;
+                            int finalH = (tempBmp.Height * scale) + textSpace;
 
-                            // Rysuj tekst
-                            if (chkShowText.Checked)
+                            using (Bitmap finalImg = new Bitmap(finalW, finalH))
+                            using (Graphics g = Graphics.FromImage(finalImg))
                             {
-                                using (Font font = new Font("Arial", (float)numFontSize.Value, FontStyle.Bold))
-                                {
-                                    StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                                    g.DrawString(line, font, Brushes.Black, new RectangleF(0, tempBmp.Height * scale, finalW, textSpace), sf);
-                                }
-                            }
+                                g.Clear(Color.White);
+                                // Ustawienie ostrego skalowania (NearestNeighbor) dla kodów kreskowych
+                                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                                
+                                // Rysuj kod
+                                g.DrawImage(tempBmp, 0, 0, finalW, tempBmp.Height * scale);
 
-                            finalImg.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
+                                // Rysuj tekst (jeśli zaznaczono)
+                                if (chkShowText.Checked)
+                                {
+                                    using (Font font = new Font("Arial", (float)numFontSize.Value, FontStyle.Bold))
+                                    {
+                                        StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                                        g.DrawString(line, font, Brushes.Black, new RectangleF(0, tempBmp.Height * scale, finalW, textSpace), sf);
+                                    }
+                                }
+                                finalImg.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
+                            }
                         }
                     }
 
@@ -144,7 +140,7 @@ namespace MaxiGen
                 } 
                 catch (Exception ex) { MessageBox.Show("Błąd: " + ex.Message); }
             }
-            lblStatus.Text = "Gotowe! Kody bez znaku wodnego zapisane.";
+            lblStatus.Text = "Gotowe!";
         }
 
         private void PrintImage(Bitmap bmp, string printerName)
