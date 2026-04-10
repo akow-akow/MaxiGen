@@ -7,7 +7,8 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
@@ -15,14 +16,20 @@ jobs:
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v2
 
-    - name: Restore
-      run: nuget restore MaxiGen.csproj -PackagesDirectory packages
+    - name: Restore NuGet Packages
+      # Ta komenda znajdzie plik .csproj w dowolnym folderze
+      run: |
+        $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1
+        Write-Host "Znaleziono projekt: $($projectFile.FullName)"
+        nuget restore $($projectFile.FullName) -PackagesDirectory packages
 
-    - name: Build
-      run: msbuild MaxiGen.csproj /p:Configuration=Release /p:OutputPath=./publish/
+    - name: Build Project
+      run: |
+        $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1
+        msbuild $($projectFile.FullName) /p:Configuration=Release /p:OutputPath=../publish/
 
     - name: Upload App
       uses: actions/upload-artifact@v4
       with:
         name: MaxiGen-Portable
-        path: ./publish/
+        path: publish/
