@@ -39,8 +39,8 @@ namespace MaxiGen
             pnlSettings.Controls.Add(new Label { Text = "Skala MaxiCode:", Dock = DockStyle.Top, Margin = new Padding(0, 15, 0, 0) });
             numCodeSize = new NumericUpDown { Dock = DockStyle.Top, Minimum = 5, Maximum = 100, Value = 15 };
 
-            btnGenerate = new Button { Text = "GENERUJ PLIKI / KOPIUJ", Dock = DockStyle.Bottom, Height = 45, BackColor = Color.LightSkyBlue, FlatStyle = FlatStyle.Flat };
-            btnPrint = new Button { Text = "DRUKUJ NA WYBRANEJ", Dock = DockStyle.Bottom, Height = 65, BackColor = Color.LimeGreen, Font = new Font(this.Font, FontStyle.Bold), FlatStyle = FlatStyle.Flat };
+            btnGenerate = new Button { Text = "GENERUJ PLIKI", Dock = DockStyle.Bottom, Height = 45, BackColor = Color.LightSkyBlue, FlatStyle = FlatStyle.Flat };
+            btnPrint = new Button { Text = "DRUKUJ", Dock = DockStyle.Bottom, Height = 65, BackColor = Color.LimeGreen, Font = new Font(this.Font, FontStyle.Bold), FlatStyle = FlatStyle.Flat };
             
             btnGenerate.Click += (s, e) => ProcessCodes(false);
             btnPrint.Click += (s, e) => ProcessCodes(true);
@@ -59,8 +59,10 @@ namespace MaxiGen
 
         private void LoadPrinters()
         {
-            foreach (string printer in PrinterSettings.InstalledPrinters) cmbPrinters.Items.Add(printer);
-            if (cmbPrinters.Items.Count > 0) cmbPrinters.SelectedIndex = 0;
+            try {
+                foreach (string printer in PrinterSettings.InstalledPrinters) cmbPrinters.Items.Add(printer);
+                if (cmbPrinters.Items.Count > 0) cmbPrinters.SelectedIndex = 0;
+            } catch { }
         }
 
         private void ProcessCodes(bool print)
@@ -75,26 +77,24 @@ namespace MaxiGen
             {
                 try {
                     Bitmap bmp = GenerateMaxiCode(line, (int)numCodeSize.Value);
-                    if (lines.Length == 1 && !print) Clipboard.SetImage(bmp);
                     string safeName = string.Join("_", line.Split(Path.GetInvalidFileNameChars()));
                     bmp.Save(Path.Combine(outputDir, safeName + ".png"), System.Drawing.Imaging.ImageFormat.Png);
                     if (print) PrintImage(bmp, cmbPrinters.SelectedItem.ToString());
-                } catch (Exception ex) { MessageBox.Show("Błąd: " + ex.Message); }
+                } catch (Exception ex) { MessageBox.Show("Blad: " + ex.Message); }
             }
-            lblStatus.Text = "Zakończono operację.";
+            lblStatus.Text = "Operacja zakonczona.";
         }
 
         private Bitmap GenerateMaxiCode(string text, int pixelSize)
         {
-            // ZMIANA: Używamy Barcoder.Maxicode.MaxicodeEncoder bezpośrednio
-            var maxicode = Barcoder.Maxicode.MaxicodeEncoder.Encode(text);
-            
-            // ZMIANA: Renderer jest w Barcoder.Renderer.Image.ImageRenderer
+            // PROBA 3: Najbardziej bezposrednie wywolanie (Namespace-agnostic)
+            // Uzywamy pelnych sciezek z biblioteki Barcoder
+            IBarcode barcode = Barcoder.Maxicode.MaxicodeEncoder.Encode(text, mode: 4);
             var renderer = new Barcoder.Renderer.Image.ImageRenderer(pixelSize: pixelSize);
             
             using (var ms = new MemoryStream())
             {
-                renderer.Render(maxicode, ms);
+                renderer.Render(barcode, ms);
                 ms.Position = 0;
 
                 using (var skBitmap = SKBitmap.Decode(ms))
@@ -136,6 +136,7 @@ namespace MaxiGen
                 pd.DefaultPageSettings.PaperSize = new PaperSize("Custom", w, h);
                 pd.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
                 pd.PrintPage += (s, ev) => {
+                    ev.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
                     if (bmp.Width > ev.PageBounds.Width || bmp.Height > ev.PageBounds.Height) {
                         float scale = Math.Min((float)ev.PageBounds.Width / bmp.Width, (float)ev.PageBounds.Height / bmp.Height);
                         ev.Graphics.DrawImage(bmp, (ev.PageBounds.Width - bmp.Width * scale) / 2, (ev.PageBounds.Height - bmp.Height * scale) / 2, bmp.Width * scale, bmp.Height * scale);
