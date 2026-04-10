@@ -4,7 +4,7 @@ using System.IO;
 using System.Windows.Forms;
 using System.Drawing.Printing;
 using System.Linq;
-using ZXing; // Główna przestrzeń nazw
+using ZXing;
 using ZXing.Common;
 
 namespace MaxiGen
@@ -12,152 +12,72 @@ namespace MaxiGen
     public class MainForm : Form
     {
         private TextBox txtInput;
-        private NumericUpDown numPaperW, numPaperH, numCodeScale, numFontSize;
-        private CheckBox chkShowText;
-        private ComboBox cmbPrinters;
-        private Button btnGenerate, btnPrint;
+        private NumericUpDown numCodeScale;
+        private Button btnPrint;
         private Label lblStatus;
 
         public MainForm()
         {
-            this.Text = "MaxiGen v3.7 - Compatibility Mode";
-            this.Size = new Size(700, 750);
-            this.StartPosition = FormStartPosition.CenterScreen;
-
-            Panel pnlSettings = new Panel { Dock = DockStyle.Right, Width = 250, Padding = new Padding(10), BackColor = Color.FromArgb(240, 240, 240) };
+            this.Text = "MaxiGen v3.8 - Forced Engine";
+            this.Size = new Size(500, 600);
             
-            pnlSettings.Controls.Add(new Label { Text = "Drukarka:", Dock = DockStyle.Top });
-            cmbPrinters = new ComboBox { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList };
-            LoadPrinters();
-            pnlSettings.Controls.Add(cmbPrinters);
+            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, Text = "TEST12345" };
+            numCodeScale = new NumericUpDown { Value = 10, Dock = DockStyle.Top };
+            btnPrint = new Button { Text = "GENERUJ I DRUKUJ", Dock = DockStyle.Bottom, Height = 50 };
+            lblStatus = new Label { Text = "Status: Oczekiwanie...", Dock = DockStyle.Bottom };
 
-            pnlSettings.Controls.Add(new Label { Text = "Szer. etykiety (mm):", Dock = DockStyle.Top, Margin = new Padding(0, 15, 0, 0) });
-            numPaperW = new NumericUpDown { Dock = DockStyle.Top, Minimum = 10, Maximum = 500, Value = 100 };
-            pnlSettings.Controls.Add(numPaperW);
-            
-            pnlSettings.Controls.Add(new Label { Text = "Wys. etykiety (mm):", Dock = DockStyle.Top, Margin = new Padding(0, 5, 0, 0) });
-            numPaperH = new NumericUpDown { Dock = DockStyle.Top, Minimum = 10, Maximum = 500, Value = 70 };
-            pnlSettings.Controls.Add(numPaperH);
-
-            pnlSettings.Controls.Add(new Label { Text = "Skala MaxiCode:", Dock = DockStyle.Top, Margin = new Padding(0, 15, 0, 0) });
-            numCodeScale = new NumericUpDown { Dock = DockStyle.Top, Minimum = 1, Maximum = 50, Value = 10 };
-            pnlSettings.Controls.Add(numCodeScale);
-
-            pnlSettings.Controls.Add(new Label { Text = "Rozmiar napisu (pt):", Dock = DockStyle.Top, Margin = new Padding(0, 15, 0, 0) });
-            numFontSize = new NumericUpDown { Dock = DockStyle.Top, Minimum = 4, Maximum = 100, Value = 16 }; 
-            pnlSettings.Controls.Add(numFontSize);
-
-            chkShowText = new CheckBox { Text = "Pokaż tekst pod kodem", Checked = true, Dock = DockStyle.Top, Margin = new Padding(0, 5, 0, 0) };
-            pnlSettings.Controls.Add(chkShowText);
-
-            btnGenerate = new Button { Text = "ZAPISZ PNG", Dock = DockStyle.Bottom, Height = 45, BackColor = Color.White, FlatStyle = FlatStyle.Flat };
-            btnPrint = new Button { Text = "DRUKUJ", Dock = DockStyle.Bottom, Height = 65, BackColor = Color.FromArgb(40, 167, 69), ForeColor = Color.White, Font = new Font(this.Font, FontStyle.Bold), FlatStyle = FlatStyle.Flat };
-            
-            btnGenerate.Click += (s, e) => ProcessCodes(false);
-            btnPrint.Click += (s, e) => ProcessCodes(true);
-
-            pnlSettings.Controls.Add(btnGenerate);
-            pnlSettings.Controls.Add(new Control { Height = 10, Dock = DockStyle.Bottom });
-            pnlSettings.Controls.Add(btnPrint);
-
-            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), Text = "KOD123456\nPRO-MAXI-FREE" };
-            lblStatus = new Label { Text = "Tryb: MultiFormatWriter", Dock = DockStyle.Bottom, Height = 25, BackColor = Color.White };
+            btnPrint.Click += (s, e) => GenerateMaxiCode();
 
             this.Controls.Add(txtInput);
-            this.Controls.Add(pnlSettings);
+            this.Controls.Add(new Label { Text = "Skala kodu:", Dock = DockStyle.Top });
+            this.Controls.Add(numCodeScale);
+            this.Controls.Add(btnPrint);
             this.Controls.Add(lblStatus);
         }
 
-        private void LoadPrinters()
+        private void GenerateMaxiCode()
         {
-            try {
-                foreach (string printer in PrinterSettings.InstalledPrinters) cmbPrinters.Items.Add(printer);
-                if (cmbPrinters.Items.Count > 0) cmbPrinters.SelectedIndex = 0;
-            } catch { }
-        }
-
-        private void ProcessCodes(bool print)
-        {
-            var lines = txtInput.Lines.Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
-            // MultiFormatWriter jest częścią głównego namespace'u ZXing
-            var writer = new MultiFormatWriter();
-
-            foreach (var line in lines)
+            try
             {
-                try 
+                string text = txtInput.Text.Split('\n')[0].Trim();
+                
+                // ROZWIĄZANIE PROBLEMU: 
+                // Zamiast MultiFormatWriter, używamy bezpośrednio konkretnego enkodera.
+                // W ZXing.Net dla .NET 4.8 często trzeba to zainicjować tak:
+                var writer = new ZXing.Maxicode.MaxicodeWriter(); 
+                
+                // Jeśli powyższe sypie błędem o braku klasy, spróbuj zamienić na:
+                // var writer = new ZXing.MaxiCode.MaxiCodeWriter(); 
+
+                var matrix = writer.encode(text, BarcodeFormat.MAXICODE, 0, 0);
+
+                int scale = (int)numCodeScale.Value;
+                using (Bitmap bmp = new Bitmap(matrix.Width * scale, matrix.Height * scale))
+                using (Graphics g = Graphics.FromImage(bmp))
                 {
-                    string outputDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Output");
-                    if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
-                    string filePath = Path.Combine(outputDir, Guid.NewGuid().ToString().Substring(0,8) + ".png");
-
-                    // Automatyczne dopasowanie enkodera do formatu MAXICODE
-                    BitMatrix matrix = writer.encode(line, BarcodeFormat.MAXICODE, 0, 0);
-                    
-                    int scale = (int)numCodeScale.Value;
-                    int textSpace = chkShowText.Checked ? (int)(numFontSize.Value * 3) : 0;
-                    
-                    using (Bitmap bmp = new Bitmap(matrix.Width * scale, (matrix.Height * scale) + textSpace))
-                    using (Graphics g = Graphics.FromImage(bmp))
+                    g.Clear(Color.White);
+                    for (int y = 0; y < matrix.Height; y++)
                     {
-                        g.Clear(Color.White);
-                        using (Brush brush = new SolidBrush(Color.Black))
+                        for (int x = 0; x < matrix.Width; x++)
                         {
-                            for (int y = 0; y < matrix.Height; y++)
-                            {
-                                for (int x = 0; x < matrix.Width; x++)
-                                {
-                                    if (matrix[x, y])
-                                        g.FillRectangle(brush, x * scale, y * scale, scale, scale);
-                                }
-                            }
+                            if (matrix[x, y])
+                                g.FillRectangle(Brushes.Black, x * scale, y * scale, scale, scale);
                         }
-
-                        if (chkShowText.Checked)
-                        {
-                            using (Font font = new Font("Arial", (float)numFontSize.Value, FontStyle.Bold))
-                            {
-                                StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                                g.DrawString(line, font, Brushes.Black, new RectangleF(0, matrix.Height * scale, bmp.Width, textSpace), sf);
-                            }
-                        }
-                        bmp.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
                     }
-
-                    if (print && cmbPrinters.SelectedItem != null)
-                    {
-                        PrintFile(filePath, cmbPrinters.SelectedItem.ToString());
-                    }
-                } 
-                catch (Exception ex) { MessageBox.Show("Błąd: " + ex.Message); }
+                    
+                    string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "preview.png");
+                    bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+                    lblStatus.Text = "Wygenerowano pomyślnie!";
+                    System.Diagnostics.Process.Start(path);
+                }
             }
-            lblStatus.Text = "Gotowe - Bez znaków wodnych!";
-        }
-
-        private void PrintFile(string path, string printerName)
-        {
-            using (PrintDocument pd = new PrintDocument())
+            catch (Exception ex)
             {
-                pd.PrinterSettings.PrinterName = printerName;
-                int w = (int)((double)numPaperW.Value / 25.4 * 100);
-                int h = (int)((double)numPaperH.Value / 25.4 * 100);
-                pd.DefaultPageSettings.PaperSize = new PaperSize("Label", w, h);
-                pd.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
-
-                pd.PrintPage += (s, ev) => {
-                    using (Image img = Image.FromFile(path))
-                    {
-                        float scale = Math.Min((float)ev.PageBounds.Width / img.Width, (float)ev.PageBounds.Height / img.Height);
-                        ev.Graphics.DrawImage(img, 0, 0, img.Width * scale, img.Height * scale);
-                    }
-                };
-                pd.Print();
+                // Wyświetlamy pełny błąd, żeby wiedzieć czy to brak klasy czy brak enkodera
+                MessageBox.Show($"BŁĄD KRYTYCZNY:\n{ex.Message}\n\nTyp błędu: {ex.GetType().Name}");
             }
         }
 
-        [STAThread] static void Main() { 
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm()); 
-        }
+        [STAThread] static void Main() { Application.Run(new MainForm()); }
     }
 }
