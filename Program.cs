@@ -1,6 +1,8 @@
 using System;
+using System.Drawing;
 using System.IO;
-using System.Linq;
+using System.Windows.Forms;
+using System.Drawing.Printing;
 using Barcoder;
 using Barcoder.Maxicode;
 using Barcoder.Renderer.Image;
@@ -8,73 +10,107 @@ using SkiaSharp;
 
 namespace MaxiGen
 {
-    class Program
+    public class MainForm : Form
     {
-        static void Main(string[] args)
+        private TextBox txtInput;
+        private Button btnGenerate, btnPrint;
+        private Label lblStatus;
+
+        public MainForm()
         {
-            var dataToEncode = new[] { "KOD12345", "TEST-6789", "MAXI-DATA-001" };
-            string outputDir = "Output";
-            
-            if (!Directory.Exists(outputDir))
-                Directory.CreateDirectory(outputDir);
+            this.Text = "MaxiCode Generator (Zebra Ready)";
+            this.Size = new Size(400, 500);
 
-            Console.WriteLine("🚀 Rozpoczynam generowanie MaxiCode (.NET 4.8)...");
+            txtInput = new TextBox { Multiline = true, Dock = DockStyle.Top, Height = 300, ScrollBars = ScrollBars.Vertical };
+            btnGenerate = new Button { Text = "Generuj i zapisz / Kopiuj", Dock = DockStyle.Top, Height = 50 };
+            btnPrint = new Button { Text = "Drukuj na Zebra (Domyślna)", Dock = DockStyle.Top, Height = 50 };
+            lblStatus = new Label { Text = "Wpisz kody (1 na linię)", Dock = DockStyle.Bottom };
 
-            foreach (var text in dataToEncode)
+            btnGenerate.Click += (s, e) => ProcessCodes(false);
+            btnPrint.Click += (s, e) => ProcessCodes(true);
+
+            this.Controls.Add(btnPrint);
+            this.Controls.Add(btnGenerate);
+            this.Controls.Add(txtInput);
+            this.Controls.Add(lblStatus);
+        }
+
+        private void ProcessCodes(bool print)
+        {
+            var lines = txtInput.Lines;
+            if (lines.Length == 0) return;
+
+            string outputDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Output");
+            Directory.CreateDirectory(outputDir);
+
+            foreach (var line in lines)
             {
-                try
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                Bitmap bmp = GenerateMaxiCode(line);
+                
+                if (lines.Length == 1 && !print) {
+                    Clipboard.SetImage(bmp);
+                    lblStatus.Text = "Skopiowano do schowka!";
+                }
+
+                string path = Path.Combine(outputDir, $"{line.Replace(" ", "_")}.png");
+                bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+
+                if (print) PrintImage(bmp);
+            }
+            if (!print) lblStatus.Text = $"Zapisano {lines.Length} plików w /Output";
+        }
+
+        private Bitmap GenerateMaxiCode(string text)
+        {
+            var maxicode = Encoders.Maxicode.Encode(text, mode: 4);
+            var renderer = new ImageRenderer(pixelSize: 10);
+            
+            using (var ms = new MemoryStream())
+            {
+                renderer.Render(maxicode, ms);
+                ms.Position = 0;
+
+                using (var skBitmap = SKBitmap.Decode(ms))
                 {
-                    // 1. Generowanie MaxiCode
-                    var maxicode = Encoders.Maxicode.Encode(text, mode: 4);
-                    
-                    // 2. Renderowanie do pamięci
-                    var renderer = new ImageRenderer(pixelSize: 10);
-                    using (var ms = new MemoryStream())
+                    var info = new SKImageInfo(skBitmap.Width, skBitmap.Height + 50);
+                    using (var surface = SKSurface.Create(info))
                     {
-                        renderer.Render(maxicode, ms);
-                        ms.Position = 0;
+                        var canvas = surface.Canvas;
+                        canvas.Clear(SKColors.White);
+                        canvas.DrawBitmap(skBitmap, 0, 0);
 
-                        // 3. SkiaSharp: Dodawanie tekstu
-                        using (var bitmap = SKBitmap.Decode(ms))
+                        using (var paint = new SKPaint { Color = SKColors.Black, TextSize = 25, IsAntialias = true, TextAlign = SKTextAlign.Center })
                         {
-                            var surfaceSize = new SKImageInfo(bitmap.Width, bitmap.Height + 40);
-                            using (var surface = SKSurface.Create(surfaceSize))
-                            {
-                                var canvas = surface.Canvas;
-                                canvas.Clear(SKColors.White);
-                                canvas.DrawBitmap(bitmap, 0, 0);
+                            canvas.DrawText(text, info.Width / 2, info.Height - 15, paint);
+                        }
 
-                                using (var paint = new SKPaint
-                                {
-                                    Color = SKColors.Black,
-                                    IsAntialias = true,
-                                    TextSize = 24,
-                                    TextAlign = SKTextAlign.Center
-                                })
-                                {
-                                    canvas.DrawText(text, surfaceSize.Width / 2, surfaceSize.Height - 10, paint);
-                                }
-
-                                // 4. Zapis
-                                using (var image = surface.Snapshot())
-                                using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
-                                {
-                                    string filePath = Path.Combine(outputDir, text + ".png");
-                                    File.WriteAllBytes(filePath, data.ToArray());
-                                }
-                            }
+                        using (var image = surface.Snapshot())
+                        using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
+                        {
+                            return new Bitmap(data.AsStream());
                         }
                     }
-                    Console.WriteLine("✅ Zapisano: " + text);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("❌ Błąd przy " + text + ": " + ex.Message);
                 }
             }
+        }
 
-            Console.WriteLine("\n✨ Gotowe! Naciśnij dowolny klawisz...");
-            Console.ReadKey();
+        private void PrintImage(Bitmap bmp)
+        {
+            PrintDocument pd = new PrintDocument();
+            pd.PrintPage += (s, ev) => {
+                // Centrowanie na małej etykiecie Zebry
+                ev.Graphics.DrawImage(bmp, 0, 0);
+            };
+            pd.Print();
+        }
+
+        [STAThread]
+        static void Main()
+        {
+            Application.EnableVisualStyles();
+            Application.Run(new MainForm());
         }
     }
 }
